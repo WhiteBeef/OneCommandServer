@@ -1,6 +1,14 @@
 param(
-    [string]$version
+    [Alias('v')][string]$version,
+    [Alias('p')][int]$port = 25565,
+    [Alias('op')][switch]$openPort,
+    [Alias('?')][switch]$help
 )
+
+if($help){
+    echo 'Command: iex "&{$(irm https://p.whitebeef.ru/paper)} [-version <version>] [-port <port>] [-op]"'
+    return
+}
 
 $javaLinks = @{
     8 = "https://corretto.aws/downloads/latest/amazon-corretto-8-x64-windows-jre.zip"
@@ -9,18 +17,24 @@ $javaLinks = @{
     21 = "https://corretto.aws/downloads/latest/amazon-corretto-21-x64-windows-jdk.zip"
 }
 
+if(($port -gt 65535) -or ($port -lt 1024)){
+    $error_message = "Port must be specified in the range of 1024 to 65535"
+    $error_message
+    return
+}
 
 $paperApi = 'https://api.papermc.io/v2/'
 $whitebeefVersionApi = 'https://whitebeef.ru/versions/'
+$whitebeefMavenUrl = 'https://mvn.whitebeef.ru/releases/ru/nikita51/AutoUPnPPortOpen/'
+
 $existing_versions = ((Invoke-WebRequest $paperApi'projects/paper').content | Out-String | ConvertFrom-Json).versions
 if (!$version) {
     $version = $existing_versions[-1]
 }
-if(!($existing_versions -contains $version))
-{
+if(!($existing_versions -contains $version)){
     $error_message = "Version minecraft `""+$version+"`" does not exist, perhaps you meant: "+$existing_versions[-1]
     $error_message
-    exit
+    return
 }
 $javaCommand = $null
 $installedJavaVersion = if($null -eq (Get-Command java -ErrorAction SilentlyContinue)) {$null} else {(Get-Command java | Select-Object -ExpandProperty Version).major}
@@ -47,7 +61,7 @@ if(($null -eq $installedJavaVersion) -Or !($supportJavaVersions -contains $insta
         $error_message
         $confirmation = Read-Host "Do you want to install the required version of java? (y/n)"
         if (!($confirmation -eq 'y')) {
-            exit
+            return
         }
         $success = $False
         foreach ($javaVersion in $supportJavaVersions)
@@ -87,7 +101,7 @@ if(($null -eq $installedJavaVersion) -Or !($supportJavaVersions -contains $insta
         if(!$success){
             $error_message = "No link to install one of the supported java versions for this version of minecraft, install java '"+$minecraftJavaJson.preferredVersion+"' yourself"
             $error_message
-            exit
+            return
         }
     }
 
@@ -119,5 +133,21 @@ if($minecraftJavaJson.hasGui){
 }
 $startFileText += " & pause"
 $startFileText | Out-File -encoding ascii start.bat
+if($port -ne 25565){
+    $serverPortSetting = "server-port="+$port
+    $serverPortSetting | Out-File -encoding ascii server.properties
+}
+if($openPort){
+    $pluginPath = (Get-Location).toString()+'\plugins'
+    New-Item -ItemType Directory -Force -Path $pluginPath | Out-Null
+    Push-Location 'plugins'
+    $url = $whitebeefMavenUrl+"maven-metadata.xml"
+    $data = [xml](iwr $url).content
+    $pluginName = $data.metadata.artifactId
+    $pluginVersion = $data.metadata.versioning.latest
+    $pluginUrl = $whitebeefMavenUrl+$pluginVersion+'/'+$pluginName+'-'+$pluginVersion+'.jar'
+    Invoke-WebRequest -Uri $pluginUrl -OutFile PortOpener.jar
+    Pop-Location
+}
 start start.bat
 Pop-Location
