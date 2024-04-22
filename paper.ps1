@@ -6,11 +6,13 @@ param(
 )
 
 if($help){
-    Write-Output 'Command: iex "&{$(irm https://p.whitebeef.ru/paper)} [-version <version>] [-port <port>] [-op]"'
+    Write-Output 'Command: iex "&{$(irm https://p.wbif.ru/paper)} [-version <version>] [-port <port>] [-op]"'
     return
 }
 
-$javaLatestVersion = 23
+[int]$javaLatestVersion = 23
+[string]$paperApi = 'https://api.papermc.io/v2/'
+[string]$whitebeefMavenUrl = 'https://mvn.wbif.ru/releases/ru/nikita51/AutoUPnPPortOpen/'
 
 $javaLinks = @{
     8 = "https://corretto.aws/downloads/latest/amazon-corretto-8-x64-windows-jre.zip"
@@ -93,9 +95,6 @@ if(($port -gt 65535) -or ($port -lt 1024)){
     return
 }
 
-[string]$paperApi = 'https://api.papermc.io/v2/'
-$whitebeefMavenUrl = 'https://mvn.whitebeef.ru/releases/ru/nikita51/AutoUPnPPortOpen/'
-
 $existing_versions = ((Invoke-WebRequest $paperApi'projects/paper').content | Out-String | ConvertFrom-Json).versions
 if (!$version) {
     $version = $existing_versions[-1]
@@ -129,9 +128,9 @@ if(($null -eq $installedJavaVersion) -or ($minecraftJavaRequired.min_version -gt
     }
     if(!$success){
         if($null -eq $installedJavaVersion){
-            $error_message = "Java missing: Server requires a java version "+$minecraftJavaRequired.min_version+"-"+$minecraftJavaRequired.max_version+", but it's not installed"
+            $error_message = "Java missing: Server requires a java version $($minecraftJavaRequired.min_version)-$($minecraftJavaRequired.max_version), but it's not installed"
         } else {
-            $error_message = "Incorrect java version: installed '"+$installedJavaVersion+"', but requires '"+$minecraftJavaRequired.min_version+"-"+$minecraftJavaRequired.max_version+"'"
+            $error_message = "Incorrect java version: installed $installedJavaVersion, but requires '$($minecraftJavaRequired.min_version)-$($minecraftJavaRequired.max_version)'"
         }
         Write-Host $error_message
         $success = $False
@@ -143,7 +142,7 @@ if(($null -eq $installedJavaVersion) -or ($minecraftJavaRequired.min_version -gt
                 continue
             }
             $link = $javaLinks[$i]
-            $confirmation = Read-Host "Do you want to install the "+$i+" version of java? (y/n/skip)"
+            $confirmation = Read-Host "Do you want to install the $([string]$i) version of java? (y/n/skip)"
             if ($confirmation -eq 'skip' -and !($null -eq $installedJavaVersion)) {
                 $javaCommand = "java"
                 $success = $true
@@ -202,7 +201,7 @@ $ProgressPreference = 'Continue'
 
 $minecraftVersion = [int](($version.Split('.') | Select-Object -SkipLast 1) -join "")
 $ramValue = ([Math]::Min([Math]::Max([Math]::Floor((Get-CimInstance Win32_PhysicalMemory | Measure-Object -Property capacity -Sum).sum /1gb /2),2),8)).toString()
-$startFileText = $javaCommand+" -Xms"+$ramValue+"G -Xmx"+$ramValue+"G -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200 -XX:+UnlockExperimentalVMOptions -XX:+DisableExplicitGC -XX:+AlwaysPreTouch -XX:G1HeapWastePercent=5 -XX:G1MixedGCCountTarget=4 -XX:InitiatingHeapOccupancyPercent=15 -XX:G1MixedGCLiveThresholdPercent=90 -XX:G1RSetUpdatingPauseTimePercent=5 -XX:SurvivorRatio=32 -XX:+PerfDisableSharedMem -XX:MaxTenuringThreshold=1 -Dusing.aikars.flags=https://mcflags.emc.gs -Daikars.new.flags=true -XX:G1NewSizePercent=30 -XX:G1MaxNewSizePercent=40 -XX:G1HeapRegionSize=8M -XX:G1ReservePercent=20 -jar $filename"
+$startFileText = "$javaCommand -Xms$($ramValue)G -Xmx$($ramValue)G -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200 -XX:+UnlockExperimentalVMOptions -XX:+DisableExplicitGC -XX:+AlwaysPreTouch -XX:G1HeapWastePercent=5 -XX:G1MixedGCCountTarget=4 -XX:InitiatingHeapOccupancyPercent=15 -XX:G1MixedGCLiveThresholdPercent=90 -XX:G1RSetUpdatingPauseTimePercent=5 -XX:SurvivorRatio=32 -XX:+PerfDisableSharedMem -XX:MaxTenuringThreshold=1 -Dusing.aikars.flags=https://mcflags.emc.gs -Daikars.new.flags=true -XX:G1NewSizePercent=30 -XX:G1MaxNewSizePercent=40 -XX:G1HeapRegionSize=8M -XX:G1ReservePercent=20 -jar $filename"
 if(hasGui($version)){
     $startFileText += " --nogui"
 }
